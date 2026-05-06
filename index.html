@@ -345,14 +345,13 @@
             stroke-linejoin: round;
             opacity: 0.18;
             filter: blur(8px);
+            /* [FIX] Transition retained; glow intensity is now driven by JS because the
+               previous CSS selectors (.node:hover ~ .connections-layer) never matched —
+               .connections-layer is a sibling of .nodes-wrapper, not of the nodes. */
             transition: opacity var(--transition-smooth);
         }
-        .node-reason:hover~.connections-layer .conn-path-glow.perceive-to-reason,
-        .node-perceive:hover~.connections-layer .conn-path-glow.perceive-to-reason,
-        .node-reason:hover~.connections-layer .conn-path-glow.reason-to-act,
-        .node-act:hover~.connections-layer .conn-path-glow.reason-to-act,
-        .node-act:hover~.connections-layer .conn-path-glow.act-to-perceive,
-        .node-perceive:hover~.connections-layer .conn-path-glow.act-to-perceive {
+        /* Highlighted state applied by JS on node hover */
+        .conn-path-glow.is-highlighted {
             opacity: 0.45;
         }
 
@@ -558,17 +557,21 @@
             <!-- Flowing dots group -->
             <g id="flowDotsGroup">
                 <!-- Dots for PERCEIVE→REASON -->
-                <circle class="flow-dot" id="dotPR1" fill="#b388ff" />
-                <circle class="flow-dot" id="dotPR2" fill="#b388ff" />
-                <circle class="flow-dot" id="dotPR3" fill="#b388ff" />
+                <!-- [FIX] Added r="4" attribute: CSS `r` property for SVG geometry is
+                     not supported as a presentation attribute in Safari < 15 or IE 11;
+                     the attribute acts as a universal fallback while the CSS rule
+                     remains for any browser that prefers CSS cascade. -->
+                <circle class="flow-dot" id="dotPR1" r="4" fill="#b388ff" />
+                <circle class="flow-dot" id="dotPR2" r="4" fill="#b388ff" />
+                <circle class="flow-dot" id="dotPR3" r="4" fill="#b388ff" />
                 <!-- Dots for REASON→ACT -->
-                <circle class="flow-dot" id="dotRA1" fill="#00e5ff" />
-                <circle class="flow-dot" id="dotRA2" fill="#00e5ff" />
-                <circle class="flow-dot" id="dotRA3" fill="#00e5ff" />
+                <circle class="flow-dot" id="dotRA1" r="4" fill="#00e5ff" />
+                <circle class="flow-dot" id="dotRA2" r="4" fill="#00e5ff" />
+                <circle class="flow-dot" id="dotRA3" r="4" fill="#00e5ff" />
                 <!-- Dots for ACT→PERCEIVE -->
-                <circle class="flow-dot" id="dotAP1" fill="#ff6e40" />
-                <circle class="flow-dot" id="dotAP2" fill="#ff6e40" />
-                <circle class="flow-dot" id="dotAP3" fill="#ff6e40" />
+                <circle class="flow-dot" id="dotAP1" r="4" fill="#ff6e40" />
+                <circle class="flow-dot" id="dotAP2" r="4" fill="#ff6e40" />
+                <circle class="flow-dot" id="dotAP3" r="4" fill="#ff6e40" />
             </g>
         </svg>
     </div>
@@ -607,49 +610,59 @@
             // ─────────────────────────────────────
             // Position nodes and update connections
             // ─────────────────────────────────────
+
+            // [FIX] Removed unused `rect` variable; use svgLayer as coordinate origin
+            // so paths are always expressed in SVG viewport space regardless of how the
+            // SVG is positioned in the page.
             function getNodeCenter(nodeEl) {
-                const rect = nodeEl.getBoundingClientRect();
-                const wrapperRect = wrapper.getBoundingClientRect();
+                const svgRect = svgLayer.getBoundingClientRect();
                 const circleEl = nodeEl.querySelector('.node-circle');
                 const circleRect = circleEl.getBoundingClientRect();
-                // Center of the circle relative to wrapper
-                const cx = circleRect.left + circleRect.width / 2 - wrapperRect.left;
-                const cy = circleRect.top + circleRect.height / 2 - wrapperRect.top;
-                return { cx, cy };
+                return {
+                    cx: circleRect.left + circleRect.width  / 2 - svgRect.left,
+                    cy: circleRect.top  + circleRect.height / 2 - svgRect.top
+                };
             }
 
             function positionNodes() {
                 const w = wrapper.clientWidth;
                 const h = wrapper.clientHeight;
 
+                // [FIX] Read actual rendered circle width so centering is correct on
+                // mobile (90 px) and desktop (130 px) without hard-coding a magic number.
+                const cw = nodeReason.querySelector('.node-circle').offsetWidth || 130;
+
                 // REASON at top center
-                nodeReason.style.left = `${w/2 - 65}px`;
-                nodeReason.style.top = `${h*0.05}px`;
+                nodeReason.style.left = `${w / 2 - cw / 2}px`;
+                nodeReason.style.top  = `${h * 0.05}px`;
 
                 // PERCEIVE at bottom-left
-                nodePerceive.style.left = `${w*0.06}px`;
-                nodePerceive.style.top = `${h*0.52}px`;
+                nodePerceive.style.left = `${w * 0.06}px`;
+                nodePerceive.style.top  = `${h * 0.52}px`;
 
                 // ACT at bottom-right
-                nodeAct.style.left = `${w*0.72}px`;
-                nodeAct.style.top = `${h*0.52}px`;
+                nodeAct.style.left = `${w * 0.72}px`;
+                nodeAct.style.top  = `${h * 0.52}px`;
             }
 
             function updateAllConnections() {
-                const reasonCenter = getNodeCenter(nodeReason);
+                const reasonCenter  = getNodeCenter(nodeReason);
                 const perceiveCenter = getNodeCenter(nodePerceive);
-                const actCenter = getNodeCenter(nodeAct);
+                const actCenter     = getNodeCenter(nodeAct);
 
-                // Helper: create a slightly curved path between two points
+                // Helper: quadratic Bézier between two points with a perpendicular offset
                 function curvedPath(x1, y1, x2, y2, curvature = 0.18) {
                     const midX = (x1 + x2) / 2;
                     const midY = (y1 + y2) / 2;
                     const dx = x2 - x1;
                     const dy = y2 - y1;
                     const len = Math.sqrt(dx * dx + dy * dy);
-                    // Perpendicular offset
+                    // [FIX] Guard against division-by-zero when two nodes overlap.
+                    // Returns a degenerate (invisible) path — all three control points
+                    // coincide — which is valid SVG and safe to pass to offset-path.
+                    if (len === 0) return `M ${x1} ${y1} Q ${x1} ${y1} ${x2} ${y2}`;
                     const nx = -dy / len;
-                    const ny = dx / len;
+                    const ny =  dx / len;
                     const offset = len * curvature;
                     const cx = midX + nx * offset;
                     const cy = midY + ny * offset;
@@ -657,24 +670,24 @@
                 }
 
                 // PERCEIVE → REASON (curved outward to the left)
-                const dPR = curvedPath(perceiveCenter.cx, perceiveCenter.cy, reasonCenter.cx, reasonCenter.cy, -0.22);
+                const dPR = curvedPath(perceiveCenter.cx, perceiveCenter.cy, reasonCenter.cx,  reasonCenter.cy,  -0.22);
                 pathPR.setAttribute('d', dPR);
                 glowPR.setAttribute('d', dPR);
 
                 // REASON → ACT (curved outward to the right)
-                const dRA = curvedPath(reasonCenter.cx, reasonCenter.cy, actCenter.cx, actCenter.cy, 0.22);
+                const dRA = curvedPath(reasonCenter.cx,  reasonCenter.cy,  actCenter.cx,     actCenter.cy,      0.22);
                 pathRA.setAttribute('d', dRA);
                 glowRA.setAttribute('d', dRA);
 
                 // ACT → PERCEIVE (curved downward)
-                const dAP = curvedPath(actCenter.cx, actCenter.cy, perceiveCenter.cx, perceiveCenter.cy, 0.20);
+                const dAP = curvedPath(actCenter.cx,     actCenter.cy,     perceiveCenter.cx, perceiveCenter.cy, 0.20);
                 pathAP.setAttribute('d', dAP);
                 glowAP.setAttribute('d', dAP);
 
-                // Update flowing dots - set offset-path for each
-                updateDotPath(dotPR1, dPR, '3s', '0s');
-                updateDotPath(dotPR2, dPR, '3s', '1s');
-                updateDotPath(dotPR3, dPR, '3s', '2s');
+                // Update flowing dots
+                updateDotPath(dotPR1, dPR, '3s',   '0s');
+                updateDotPath(dotPR2, dPR, '3s',   '1s');
+                updateDotPath(dotPR3, dPR, '3s',   '2s');
                 updateDotPath(dotRA1, dRA, '3.2s', '0.3s');
                 updateDotPath(dotRA2, dRA, '3.2s', '1.3s');
                 updateDotPath(dotRA3, dRA, '3.2s', '2.3s');
@@ -684,28 +697,49 @@
             }
 
             function updateDotPath(dotEl, pathD, duration, delay) {
-                // We use offset-path CSS property for animating along the path
-                dotEl.style.offsetPath = `path('${pathD}')`;
                 dotEl.style.setProperty('--flow-duration', duration);
-                dotEl.style.setProperty('--flow-delay', delay);
-                // Add active class to trigger animation
-                dotEl.classList.add('active');
+                dotEl.style.setProperty('--flow-delay',    delay);
+
+                // [FIX] Only restart the animation when the path actually changed.
+                // Without this, resizing causes dots to "teleport" mid-animation because
+                // offset-path updates but the running animation cycle continues on the old
+                // geometry. getBoundingClientRect() is used to force a synchronous layout
+                // flush (reflow) on SVG elements: `void el.offsetWidth` is not reliable
+                // for SVG in Chrome < 80 and has no effect in Firefox SVG elements.
+                const prev = dotEl.getAttribute('data-path');
+                if (prev !== pathD) {
+                    dotEl.setAttribute('data-path', pathD);
+                    dotEl.style.offsetPath = `path('${pathD}')`;
+                    if (dotEl.classList.contains('active')) {
+                        dotEl.classList.remove('active');
+                        void dotEl.getBoundingClientRect(); // force reflow → resets animation
+                        dotEl.classList.add('active');
+                    } else {
+                        dotEl.classList.add('active');
+                    }
+                } else if (!dotEl.classList.contains('active')) {
+                    dotEl.style.offsetPath = `path('${pathD}')`;
+                    dotEl.classList.add('active');
+                }
             }
 
             // ─────────────────────────────────────
             // Initialize and handle resize
             // ─────────────────────────────────────
+
+            // [FIX] SVG lives at inset:0 and fills the main-container via CSS.
+            // Instead of fighting that with manual left/top/width/height overrides
+            // (which conflicted with the inset:0 rule), we simply set viewBox to
+            // match the SVG's actual bounding rect and let CSS handle placement.
             function init() {
-                // Sync SVG layer size with wrapper
-                const wrapperRect = wrapper.getBoundingClientRect();
-                svgLayer.setAttribute('viewBox', `0 0 ${wrapperRect.width} ${wrapperRect.height}`);
-                svgLayer.style.width = wrapperRect.width + 'px';
-                svgLayer.style.height = wrapperRect.height + 'px';
-                svgLayer.style.left = wrapperRect.left + 'px';
-                svgLayer.style.top = wrapperRect.top + 'px';
+                const svgRect = svgLayer.getBoundingClientRect();
+                svgLayer.setAttribute('viewBox', `0 0 ${svgRect.width} ${svgRect.height}`);
 
                 positionNodes();
-                // Small delay to let layout settle
+                // Two nested rAFs ensure layout has fully settled after positionNodes().
+                // The first rAF fires after the current style recalc/layout; the second
+                // fires after the browser has committed that frame, so getBoundingClientRect
+                // inside updateAllConnections reads the final, stable node positions.
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         updateAllConnections();
@@ -713,58 +747,49 @@
                 });
             }
 
-            function onResize() {
-                const wrapperRect = wrapper.getBoundingClientRect();
-                svgLayer.setAttribute('viewBox', `0 0 ${wrapperRect.width} ${wrapperRect.height}`);
-                svgLayer.style.width = wrapperRect.width + 'px';
-                svgLayer.style.height = wrapperRect.height + 'px';
-                svgLayer.style.left = wrapperRect.left + 'px';
-                svgLayer.style.top = wrapperRect.top + 'px';
-                positionNodes();
-                requestAnimationFrame(() => {
-                    updateAllConnections();
-                });
-            }
-
             // ─────────────────────────────────────
             // Event listeners
             // ─────────────────────────────────────
-            window.addEventListener('resize', onResize);
-            // Also recalculate on scroll (in case of mobile address bar)
-            window.addEventListener('scroll', () => {
-                requestAnimationFrame(() => {
-                    const wrapperRect = wrapper.getBoundingClientRect();
-                    svgLayer.style.left = wrapperRect.left + 'px';
-                    svgLayer.style.top = wrapperRect.top + 'px';
-                    updateAllConnections();
-                });
+
+            // [FIX] Debounce resize so it fires at most once per 100 ms instead of
+            // dozens of times per second, preventing jank during window dragging.
+            let _resizeTimer = null;
+            window.addEventListener('resize', () => {
+                clearTimeout(_resizeTimer);
+                _resizeTimer = setTimeout(init, 100);
             });
 
-            // Hover effects - intensify nearby connections
-            function addHoverListeners(nodeEl) {
-                nodeEl.addEventListener('mouseenter', () => {
-                    // Recalculate to ensure accuracy
-                    updateAllConnections();
-                });
-                nodeEl.addEventListener('mouseleave', () => {
-                    updateAllConnections();
-                });
+            // [FIX] Mark scroll listener as passive for better mobile scroll performance.
+            // Only recalculate connection positions; no need to reposition the SVG
+            // because it is fixed to the viewport via inset:0.
+            window.addEventListener('scroll', () => {
+                requestAnimationFrame(updateAllConnections);
+            }, { passive: true });
+
+            // [FIX] Replace addHoverListeners (which fired unnecessary updateAllConnections
+            // calls and had no visible effect) with JS-driven glow toggling.
+            // The previous CSS selectors (.node-*:hover ~ .connections-layer) never
+            // matched because nodes are children of .nodes-wrapper, not siblings of
+            // .connections-layer — so the hover glow was always broken.
+            function setGlow(on, ...els) {
+                els.forEach(el => el.classList.toggle('is-highlighted', on));
             }
-            addHoverListeners(nodeReason);
-            addHoverListeners(nodePerceive);
-            addHoverListeners(nodeAct);
+            nodeReason.addEventListener('mouseenter',  () => setGlow(true,  glowPR, glowRA));
+            nodeReason.addEventListener('mouseleave',  () => setGlow(false, glowPR, glowRA));
+            nodePerceive.addEventListener('mouseenter', () => setGlow(true,  glowPR, glowAP));
+            nodePerceive.addEventListener('mouseleave', () => setGlow(false, glowPR, glowAP));
+            nodeAct.addEventListener('mouseenter',     () => setGlow(true,  glowRA, glowAP));
+            nodeAct.addEventListener('mouseleave',     () => setGlow(false, glowRA, glowAP));
 
             // ─────────────────────────────────────
             // Kick off
             // ─────────────────────────────────────
             init();
 
-            // Re-init after fonts load
-            document.fonts && document.fonts.ready.then(() => {
-                init();
-            });
+            // Re-init after fonts load (may shift label widths)
+            document.fonts && document.fonts.ready.then(init);
 
-            // Also re-init after a short delay for any layout shifts
+            // Defensive re-init to absorb late layout shifts
             setTimeout(init, 300);
             setTimeout(init, 800);
 
