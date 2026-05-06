@@ -557,7 +557,10 @@
             <!-- Flowing dots group -->
             <g id="flowDotsGroup">
                 <!-- Dots for PERCEIVE→REASON -->
-                <!-- [FIX] Added r="4" attribute: CSS `r` property has inconsistent support in older browsers -->
+                <!-- [FIX] Added r="4" attribute: CSS `r` property for SVG geometry is
+                     not supported as a presentation attribute in Safari < 15 or IE 11;
+                     the attribute acts as a universal fallback while the CSS rule
+                     remains for any browser that prefers CSS cascade. -->
                 <circle class="flow-dot" id="dotPR1" r="4" fill="#b388ff" />
                 <circle class="flow-dot" id="dotPR2" r="4" fill="#b388ff" />
                 <circle class="flow-dot" id="dotPR3" r="4" fill="#b388ff" />
@@ -654,7 +657,9 @@
                     const dx = x2 - x1;
                     const dy = y2 - y1;
                     const len = Math.sqrt(dx * dx + dy * dy);
-                    // [FIX] Guard against division-by-zero when two nodes overlap
+                    // [FIX] Guard against division-by-zero when two nodes overlap.
+                    // Returns a degenerate (invisible) path — all three control points
+                    // coincide — which is valid SVG and safe to pass to offset-path.
                     if (len === 0) return `M ${x1} ${y1} Q ${x1} ${y1} ${x2} ${y2}`;
                     const nx = -dy / len;
                     const ny =  dx / len;
@@ -698,8 +703,9 @@
                 // [FIX] Only restart the animation when the path actually changed.
                 // Without this, resizing causes dots to "teleport" mid-animation because
                 // offset-path updates but the running animation cycle continues on the old
-                // geometry. getBoundingClientRect() is used to force a reliable reflow on
-                // SVG elements (void offsetWidth is not guaranteed for SVG in all browsers).
+                // geometry. getBoundingClientRect() is used to force a synchronous layout
+                // flush (reflow) on SVG elements: `void el.offsetWidth` is not reliable
+                // for SVG in Chrome < 80 and has no effect in Firefox SVG elements.
                 const prev = dotEl.getAttribute('data-path');
                 if (prev !== pathD) {
                     dotEl.setAttribute('data-path', pathD);
@@ -730,7 +736,10 @@
                 svgLayer.setAttribute('viewBox', `0 0 ${svgRect.width} ${svgRect.height}`);
 
                 positionNodes();
-                // Double rAF: first waits for style recalc, second for layout/paint.
+                // Two nested rAFs ensure layout has fully settled after positionNodes().
+                // The first rAF fires after the current style recalc/layout; the second
+                // fires after the browser has committed that frame, so getBoundingClientRect
+                // inside updateAllConnections reads the final, stable node positions.
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         updateAllConnections();
