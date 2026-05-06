@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cognitive Architecture | REASON • PERCEIVE • ACT</title>
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --reason-color: #00e5ff;
+            --reason-glow: #00e5ff66;
+            --perceive-color: #b388ff;
+            --perceive-glow: #b388ff66;
+            --act-color: #ff6e40;
+            --act-glow: #ff6e4066;
+            --text-primary: #e8e8f0;
+            --text-secondary: #9090a8;
+            --border-subtle: #1e1e2e;
+            --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+            --font-sans: 'Inter', 'Segoe UI', 'SF Pro Display', system-ui, -apple-system, sans-serif;
+            --transition-smooth: 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            font-family: var(--font-sans);
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Ambient background glow orbs */
+        .ambient-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.10;
+            pointer-events: none;
+            z-index: 0;
+            animation: ambientDrift 18s ease-in-out infinite;
+        }
+        .ambient-orb.orb-1 {
+            width: 500px;
+            height: 500px;
+            background: var(--reason-color);
+            top: -15%;
+            left: 25%;
+            animation-delay: 0s;
+            animation-duration: 20s;
+        }
+        .ambient-orb.orb-2 {
+            width: 400px;
+            height: 400px;
+            background: var(--perceive-color);
+            bottom: -18%;
+            left: -8%;
+            animation-delay: -7s;
+            animation-duration: 22s;
+        }
+        .ambient-orb.orb-3 {
+            width: 420px;
+            height: 420px;
+            background: var(--act-color);
+            bottom: -10%;
+            right: -8%;
+            animation-delay: -13s;
+            animation-duration: 19s;
+        }
+        @keyframes ambientDrift {
+            0%,
+            100% {
+                transform: translate(0, 0) scale(1);
+            }
+            25% {
+                transform: translate(60px, -40px) scale(1.15);
+            }
+            50% {
+                transform: translate(-30px, 50px) scale(0.9);
+            }
+            75% {
+                transform: translate(-50px, -30px) scale(1.08);
+            }
+        }
+
+        /* Subtle grid overlay */
+        .grid-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+            background-size: 60px 60px;
+            mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+            -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 70%);
+        }
+
+        /* Main container */
+        .main-container {
+            position: relative;
+            z-index: 1;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* SVG layer for connections */
+        .connections-layer {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Node wrapper */
+        .nodes-wrapper {
+            position: relative;
+            z-index: 3;
+            width: 100%;
+            max-width: 700px;
+            aspect-ratio: 1.4 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Individual node */
+        .node {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform var(--transition-smooth), filter var(--transition-smooth);
+            z-index: 4;
+        }
+        .node:hover {
+            transform: scale(1.07);
+            filter: brightness(1.2);
+        }
+        .node:active {
+            transform: scale(0.96);
+            transition: transform 0.1s ease;
+        }
+
+        /* Node circle */
+        .node-circle {
+            width: 130px;
+            height: 130px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: var(--surface);
+            border: 2px solid var(--border-subtle);
+            transition: all var(--transition-smooth);
+            box-shadow: 0 0 0 0 transparent;
+        }
+        .node:hover .node-circle {
+            border-color: transparent;
+        }
+
+        /* Node specific glow colors */
+        .node-reason .node-circle {
+            box-shadow: 0 0 30px var(--reason-glow), 0 0 80px var(--reason-glow), inset 0 0 30px rgba(0, 229, 255, 0.06);
+            border-color: rgba(0, 229, 255, 0.4);
+        }
+        .node-reason:hover .node-circle {
+            box-shadow: 0 0 50px var(--reason-glow), 0 0 120px var(--reason-glow), 0 0 180px rgba(0, 229, 255, 0.3), inset 0 0 40px rgba(0, 229, 255, 0.1);
+            border-color: var(--reason-color);
+        }
+
+        .node-perceive .node-circle {
+            box-shadow: 0 0 30px var(--perceive-glow), 0 0 80px var(--perceive-glow), inset 0 0 30px rgba(179, 136, 255, 0.06);
+            border-color: rgba(179, 136, 255, 0.4);
+        }
+        .node-perceive:hover .node-circle {
+            box-shadow: 0 0 50px var(--perceive-glow), 0 0 120px var(--perceive-glow), 0 0 180px rgba(179, 136, 255, 0.3), inset 0 0 40px rgba(179, 136, 255, 0.1);
+            border-color: var(--perceive-color);
+        }
+
+        .node-act .node-circle {
+            box-shadow: 0 0 30px var(--act-glow), 0 0 80px var(--act-glow), inset 0 0 30px rgba(255, 110, 64, 0.06);
+            border-color: rgba(255, 110, 64, 0.4);
+        }
+        .node-act:hover .node-circle {
+            box-shadow: 0 0 50px var(--act-glow), 0 0 120px var(--act-glow), 0 0 180px rgba(255, 110, 64, 0.3), inset 0 0 40px rgba(255, 110, 64, 0.1);
+            border-color: var(--act-color);
+        }
+
+        /* Inner pulsing ring */
+        .node-circle::before {
+            content: '';
+            position: absolute;
+            inset: 6px;
+            border-radius: 50%;
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            animation: ringPulse 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes ringPulse {
+            0%,
+            100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.7;
+                transform: scale(1.04);
+            }
+        }
+
+        /* Node icon (simple geometric shape) */
+        .node-icon {
+            width: 40px;
+            height: 40px;
+            position: relative;
+            z-index: 1;
+        }
+        .node-reason .node-icon {
+            /* Diamond / brain-like shape */
+            width: 36px;
+            height: 36px;
+            background: var(--reason-color);
+            border-radius: 6px;
+            transform: rotate(45deg);
+            box-shadow: 0 0 20px var(--reason-glow);
+        }
+        .node-perceive .node-icon {
+            /* Eye-like shape */
+            width: 44px;
+            height: 28px;
+            background: transparent;
+            border: 3px solid var(--perceive-color);
+            border-radius: 50%;
+            position: relative;
+            box-shadow: 0 0 20px var(--perceive-glow), inset 0 0 12px var(--perceive-glow);
+        }
+        .node-perceive .node-icon::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background: var(--perceive-color);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px var(--perceive-color);
+        }
+        .node-act .node-icon {
+            /* Arrow / action shape */
+            width: 0;
+            height: 0;
+            border-left: 18px solid transparent;
+            border-right: 18px solid transparent;
+            border-bottom: 34px solid var(--act-color);
+            filter: drop-shadow(0 0 16px var(--act-glow));
+        }
+
+        /* Node label */
+        .node-label {
+            margin-top: 18px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            transition: color var(--transition-smooth), text-shadow var(--transition-smooth);
+            text-align: center;
+        }
+        .node-reason:hover .node-label {
+            color: var(--reason-color);
+            text-shadow: 0 0 18px var(--reason-glow);
+        }
+        .node-perceive:hover .node-label {
+            color: var(--perceive-color);
+            text-shadow: 0 0 18px var(--perceive-glow);
+        }
+        .node-act:hover .node-label {
+            color: var(--act-color);
+            text-shadow: 0 0 18px var(--act-glow);
+        }
+
+        /* Subtle dot indicator below label */
+        .node-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            margin-top: 8px;
+            background: var(--text-secondary);
+            transition: all var(--transition-smooth);
+            opacity: 0.5;
+        }
+        .node-reason:hover .node-dot {
+            background: var(--reason-color);
+            opacity: 1;
+            box-shadow: 0 0 10px var(--reason-color);
+        }
+        .node-perceive:hover .node-dot {
+            background: var(--perceive-color);
+            opacity: 1;
+            box-shadow: 0 0 10px var(--perceive-color);
+        }
+        .node-act:hover .node-dot {
+            background: var(--act-color);
+            opacity: 1;
+            box-shadow: 0 0 10px var(--act-color);
+        }
+
+        /* Connection SVG styles */
+        .conn-path {
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: 0.7;
+            transition: opacity var(--transition-smooth), stroke-width var(--transition-smooth);
+        }
+        .conn-path-glow {
+            fill: none;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: 0.18;
+            filter: blur(8px);
+            transition: opacity var(--transition-smooth);
+        }
+        .node-reason:hover~.connections-layer .conn-path-glow.perceive-to-reason,
+        .node-perceive:hover~.connections-layer .conn-path-glow.perceive-to-reason,
+        .node-reason:hover~.connections-layer .conn-path-glow.reason-to-act,
+        .node-act:hover~.connections-layer .conn-path-glow.reason-to-act,
+        .node-act:hover~.connections-layer .conn-path-glow.act-to-perceive,
+        .node-perceive:hover~.connections-layer .conn-path-glow.act-to-perceive {
+            opacity: 0.45;
+        }
+
+        /* Flowing dots along paths */
+        .flow-dot {
+            r: 4;
+            fill: #ffffff;
+            opacity: 0;
+            filter: blur(1px);
+        }
+        .flow-dot.active {
+            opacity: 0.9;
+            animation: flowAlongPath var(--flow-duration, 3s) linear infinite;
+            animation-delay: var(--flow-delay, 0s);
+        }
+        @keyframes flowAlongPath {
+            0% {
+                offset-distance: 0%;
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            85% {
+                opacity: 1;
+            }
+            100% {
+                offset-distance: 100%;
+                opacity: 0;
+            }
+        }
+
+        /* Arrowhead markers */
+        .arrow-marker-reason {
+            fill: var(--reason-color);
+        }
+        .arrow-marker-perceive {
+            fill: var(--perceive-color);
+        }
+        .arrow-marker-act {
+            fill: var(--act-color);
+        }
+
+        /* Title / watermark */
+        .watermark {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 5;
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            letter-spacing: 0.28em;
+            color: rgba(255, 255, 255, 0.25);
+            pointer-events: none;
+            text-align: center;
+        }
+
+        /* Pulse hint on center */
+        .center-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.5);
+            z-index: 1;
+            pointer-events: none;
+            animation: centerPulse 2.5s ease-in-out infinite;
+        }
+        @keyframes centerPulse {
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+                transform: translate(-50%, -50%) scale(1);
+            }
+            50% {
+                box-shadow: 0 0 0 30px rgba(255, 255, 255, 0);
+                transform: translate(-50%, -50%) scale(1.8);
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 600px) {
+            .node-circle {
+                width: 90px;
+                height: 90px;
+            }
+            .node-icon {
+                transform: scale(0.7);
+            }
+            .node-reason .node-icon {
+                transform: rotate(45deg) scale(0.7);
+            }
+            .node-label {
+                font-size: 0.65rem;
+                letter-spacing: 0.15em;
+                margin-top: 10px;
+            }
+            .nodes-wrapper {
+                max-width: 340px;
+                aspect-ratio: 1.2 / 1;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient glowing orbs -->
+    <div class="ambient-orb orb-1"></div>
+    <div class="ambient-orb orb-2"></div>
+    <div class="ambient-orb orb-3"></div>
+
+    <!-- Subtle grid -->
+    <div class="grid-overlay"></div>
+
+    <!-- Main container -->
+    <div class="main-container">
+        <div class="nodes-wrapper" id="nodesWrapper">
+            <!-- Center subtle pulse -->
+            <div class="center-hint"></div>
+
+            <!-- REASON node (top) -->
+            <div class="node node-reason" id="nodeReason" data-node="reason">
+                <div class="node-circle">
+                    <div class="node-icon"></div>
+                </div>
+                <span class="node-label">REASON</span>
+                <div class="node-dot"></div>
+            </div>
+
+            <!-- PERCEIVE node (bottom-left) -->
+            <div class="node node-perceive" id="nodePerceive" data-node="perceive">
+                <div class="node-circle">
+                    <div class="node-icon"></div>
+                </div>
+                <span class="node-label">PERCEIVE</span>
+                <div class="node-dot"></div>
+            </div>
+
+            <!-- ACT node (bottom-right) -->
+            <div class="node node-act" id="nodeAct" data-node="act">
+                <div class="node-circle">
+                    <div class="node-icon"></div>
+                </div>
+                <span class="node-label">ACT</span>
+                <div class="node-dot"></div>
+            </div>
+        </div>
+
+        <!-- SVG connections layer -->
+        <svg class="connections-layer" id="connectionsLayer" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <!-- Arrowhead markers -->
+                <marker id="arrowReason" class="arrow-marker-reason" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+                    <polygon points="0,1 10,4 0,7" />
+                </marker>
+                <marker id="arrowPerceive" class="arrow-marker-perceive" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+                    <polygon points="0,1 10,4 0,7" />
+                </marker>
+                <marker id="arrowAct" class="arrow-marker-act" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+                    <polygon points="0,1 10,4 0,7" />
+                </marker>
+
+                <!-- Glow filters -->
+                <filter id="glowReason" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+                <filter id="glowPerceive" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+                <filter id="glowAct" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="blur" />
+                    <feMerge>
+                        <feMergeNode in="blur" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+            </defs>
+
+            <!-- PERCEIVE → REASON (bottom-left to top) -->
+            <path class="conn-path-glow perceive-to-reason" id="glowPR" stroke="#b388ff" />
+            <path class="conn-path perceive-to-reason" id="pathPR" stroke="#b388ff" marker-end="url(#arrowPerceive)" filter="url(#glowPerceive)" />
+
+            <!-- REASON → ACT (top to bottom-right) -->
+            <path class="conn-path-glow reason-to-act" id="glowRA" stroke="#00e5ff" />
+            <path class="conn-path reason-to-act" id="pathRA" stroke="#00e5ff" marker-end="url(#arrowReason)" filter="url(#glowReason)" />
+
+            <!-- ACT → PERCEIVE (bottom-right to bottom-left) -->
+            <path class="conn-path-glow act-to-perceive" id="glowAP" stroke="#ff6e40" />
+            <path class="conn-path act-to-perceive" id="pathAP" stroke="#ff6e40" marker-end="url(#arrowAct)" filter="url(#glowAct)" />
+
+            <!-- Flowing dots group -->
+            <g id="flowDotsGroup">
+                <!-- Dots for PERCEIVE→REASON -->
+                <circle class="flow-dot" id="dotPR1" fill="#b388ff" />
+                <circle class="flow-dot" id="dotPR2" fill="#b388ff" />
+                <circle class="flow-dot" id="dotPR3" fill="#b388ff" />
+                <!-- Dots for REASON→ACT -->
+                <circle class="flow-dot" id="dotRA1" fill="#00e5ff" />
+                <circle class="flow-dot" id="dotRA2" fill="#00e5ff" />
+                <circle class="flow-dot" id="dotRA3" fill="#00e5ff" />
+                <!-- Dots for ACT→PERCEIVE -->
+                <circle class="flow-dot" id="dotAP1" fill="#ff6e40" />
+                <circle class="flow-dot" id="dotAP2" fill="#ff6e40" />
+                <circle class="flow-dot" id="dotAP3" fill="#ff6e40" />
+            </g>
+        </svg>
+    </div>
+
+    <!-- Watermark -->
+    <div class="watermark">COGNITIVE &nbsp; LOOP</div>
+
+    <script>
+        (function() {
+            // ─────────────────────────────────────
+            // DOM references
+            // ─────────────────────────────────────
+            const wrapper = document.getElementById('nodesWrapper');
+            const svgLayer = document.getElementById('connectionsLayer');
+            const nodeReason = document.getElementById('nodeReason');
+            const nodePerceive = document.getElementById('nodePerceive');
+            const nodeAct = document.getElementById('nodeAct');
+
+            const pathPR = document.getElementById('pathPR');
+            const glowPR = document.getElementById('glowPR');
+            const pathRA = document.getElementById('pathRA');
+            const glowRA = document.getElementById('glowRA');
+            const pathAP = document.getElementById('pathAP');
+            const glowAP = document.getElementById('glowAP');
+
+            const dotPR1 = document.getElementById('dotPR1');
+            const dotPR2 = document.getElementById('dotPR2');
+            const dotPR3 = document.getElementById('dotPR3');
+            const dotRA1 = document.getElementById('dotRA1');
+            const dotRA2 = document.getElementById('dotRA2');
+            const dotRA3 = document.getElementById('dotRA3');
+            const dotAP1 = document.getElementById('dotAP1');
+            const dotAP2 = document.getElementById('dotAP2');
+            const dotAP3 = document.getElementById('dotAP3');
+
+            // ─────────────────────────────────────
+            // Position nodes and update connections
+            // ─────────────────────────────────────
+            function getNodeCenter(nodeEl) {
+                const rect = nodeEl.getBoundingClientRect();
+                const wrapperRect = wrapper.getBoundingClientRect();
+                const circleEl = nodeEl.querySelector('.node-circle');
+                const circleRect = circleEl.getBoundingClientRect();
+                // Center of the circle relative to wrapper
+                const cx = circleRect.left + circleRect.width / 2 - wrapperRect.left;
+                const cy = circleRect.top + circleRect.height / 2 - wrapperRect.top;
+                return { cx, cy };
+            }
+
+            function positionNodes() {
+                const w = wrapper.clientWidth;
+                const h = wrapper.clientHeight;
+
+                // REASON at top center
+                nodeReason.style.left = `${w/2 - 65}px`;
+                nodeReason.style.top = `${h*0.05}px`;
+
+                // PERCEIVE at bottom-left
+                nodePerceive.style.left = `${w*0.06}px`;
+                nodePerceive.style.top = `${h*0.52}px`;
+
+                // ACT at bottom-right
+                nodeAct.style.left = `${w*0.72}px`;
+                nodeAct.style.top = `${h*0.52}px`;
+            }
+
+            function updateAllConnections() {
+                const reasonCenter = getNodeCenter(nodeReason);
+                const perceiveCenter = getNodeCenter(nodePerceive);
+                const actCenter = getNodeCenter(nodeAct);
+
+                // Helper: create a slightly curved path between two points
+                function curvedPath(x1, y1, x2, y2, curvature = 0.18) {
+                    const midX = (x1 + x2) / 2;
+                    const midY = (y1 + y2) / 2;
+                    const dx = x2 - x1;
+                    const dy = y2 - y1;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    // Perpendicular offset
+                    const nx = -dy / len;
+                    const ny = dx / len;
+                    const offset = len * curvature;
+                    const cx = midX + nx * offset;
+                    const cy = midY + ny * offset;
+                    return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+                }
+
+                // PERCEIVE → REASON (curved outward to the left)
+                const dPR = curvedPath(perceiveCenter.cx, perceiveCenter.cy, reasonCenter.cx, reasonCenter.cy, -0.22);
+                pathPR.setAttribute('d', dPR);
+                glowPR.setAttribute('d', dPR);
+
+                // REASON → ACT (curved outward to the right)
+                const dRA = curvedPath(reasonCenter.cx, reasonCenter.cy, actCenter.cx, actCenter.cy, 0.22);
+                pathRA.setAttribute('d', dRA);
+                glowRA.setAttribute('d', dRA);
+
+                // ACT → PERCEIVE (curved downward)
+                const dAP = curvedPath(actCenter.cx, actCenter.cy, perceiveCenter.cx, perceiveCenter.cy, 0.20);
+                pathAP.setAttribute('d', dAP);
+                glowAP.setAttribute('d', dAP);
+
+                // Update flowing dots - set offset-path for each
+                updateDotPath(dotPR1, dPR, '3s', '0s');
+                updateDotPath(dotPR2, dPR, '3s', '1s');
+                updateDotPath(dotPR3, dPR, '3s', '2s');
+                updateDotPath(dotRA1, dRA, '3.2s', '0.3s');
+                updateDotPath(dotRA2, dRA, '3.2s', '1.3s');
+                updateDotPath(dotRA3, dRA, '3.2s', '2.3s');
+                updateDotPath(dotAP1, dAP, '3.4s', '0.6s');
+                updateDotPath(dotAP2, dAP, '3.4s', '1.6s');
+                updateDotPath(dotAP3, dAP, '3.4s', '2.6s');
+            }
+
+            function updateDotPath(dotEl, pathD, duration, delay) {
+                // We use offset-path CSS property for animating along the path
+                dotEl.style.offsetPath = `path('${pathD}')`;
+                dotEl.style.setProperty('--flow-duration', duration);
+                dotEl.style.setProperty('--flow-delay', delay);
+                // Add active class to trigger animation
+                dotEl.classList.add('active');
+            }
+
+            // ─────────────────────────────────────
+            // Initialize and handle resize
+            // ─────────────────────────────────────
+            function init() {
+                // Sync SVG layer size with wrapper
+                const wrapperRect = wrapper.getBoundingClientRect();
+                svgLayer.setAttribute('viewBox', `0 0 ${wrapperRect.width} ${wrapperRect.height}`);
+                svgLayer.style.width = wrapperRect.width + 'px';
+                svgLayer.style.height = wrapperRect.height + 'px';
+                svgLayer.style.left = wrapperRect.left + 'px';
+                svgLayer.style.top = wrapperRect.top + 'px';
+
+                positionNodes();
+                // Small delay to let layout settle
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        updateAllConnections();
+                    });
+                });
+            }
+
+            function onResize() {
+                const wrapperRect = wrapper.getBoundingClientRect();
+                svgLayer.setAttribute('viewBox', `0 0 ${wrapperRect.width} ${wrapperRect.height}`);
+                svgLayer.style.width = wrapperRect.width + 'px';
+                svgLayer.style.height = wrapperRect.height + 'px';
+                svgLayer.style.left = wrapperRect.left + 'px';
+                svgLayer.style.top = wrapperRect.top + 'px';
+                positionNodes();
+                requestAnimationFrame(() => {
+                    updateAllConnections();
+                });
+            }
+
+            // ─────────────────────────────────────
+            // Event listeners
+            // ─────────────────────────────────────
+            window.addEventListener('resize', onResize);
+            // Also recalculate on scroll (in case of mobile address bar)
+            window.addEventListener('scroll', () => {
+                requestAnimationFrame(() => {
+                    const wrapperRect = wrapper.getBoundingClientRect();
+                    svgLayer.style.left = wrapperRect.left + 'px';
+                    svgLayer.style.top = wrapperRect.top + 'px';
+                    updateAllConnections();
+                });
+            });
+
+            // Hover effects - intensify nearby connections
+            function addHoverListeners(nodeEl) {
+                nodeEl.addEventListener('mouseenter', () => {
+                    // Recalculate to ensure accuracy
+                    updateAllConnections();
+                });
+                nodeEl.addEventListener('mouseleave', () => {
+                    updateAllConnections();
+                });
+            }
+            addHoverListeners(nodeReason);
+            addHoverListeners(nodePerceive);
+            addHoverListeners(nodeAct);
+
+            // ─────────────────────────────────────
+            // Kick off
+            // ─────────────────────────────────────
+            init();
+
+            // Re-init after fonts load
+            document.fonts && document.fonts.ready.then(() => {
+                init();
+            });
+
+            // Also re-init after a short delay for any layout shifts
+            setTimeout(init, 300);
+            setTimeout(init, 800);
+
+            console.log('%c🧠 Cognitive Architecture Loop %cReady',
+                'font-size:1.1em;color:#00e5ff;',
+                'color:#9090a8;');
+            console.log('%c REASON ↔ PERCEIVE ↔ ACT %c⚡',
+                'font-family:monospace;color:#b388ff;',
+                'color:#ff6e40;');
+        })();
+    </script>
+</body>
+</html>
